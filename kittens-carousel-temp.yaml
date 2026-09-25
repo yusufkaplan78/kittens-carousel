@@ -1,0 +1,61 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: |
+  This CloudFormation Template is written to run Kittens Carousel Static Website on EC2. 
+  Kittens Carousel Static Website will be deployed on Amazon Linux 2023 EC2 Instance with custom 
+  security group which allows http connections on port 80 and ssh port 22 from anywhere. Kittens Carousel Static Website
+  will be downloaded from my Public Github repository, then be deployed on Apache Web Server.
+  
+Parameters:
+  KeyPairParameter:
+    Description: Select your key pair.
+    Type: AWS::EC2::KeyPair::KeyName
+
+  LatestAmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64'
+
+Resources:
+  WebServer:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref LatestAmiId
+      InstanceType: t2.micro
+      KeyName: !Ref KeyPairParameter
+      SecurityGroups: 
+        - !Ref WebServerSG
+      Tags: 
+        - Key: Name
+          Value: !Sub Web Server of ${AWS::StackName}
+      UserData: !Base64 |
+        #! /bin/bash
+        dnf update -y
+        dnf install httpd -y
+        FOLDER="https://raw.githubusercontent.com/guile-clarusway/kittenscarousel/refs/heads/main/static-web"
+        cd /var/www/html
+        wget ${FOLDER}/index.html
+        wget ${FOLDER}/cat0.jpg
+        wget ${FOLDER}/cat1.jpg
+        wget ${FOLDER}/cat2.jpg
+        systemctl start httpd
+        systemctl enable httpd
+
+  WebServerSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allows SSH and HTTP. # Required
+      SecurityGroupIngress: 
+        - CidrIp: 0.0.0.0/0
+          FromPort: 22
+          IpProtocol: tcp
+          ToPort: 22
+        - CidrIp: 0.0.0.0/0
+          FromPort: 80
+          IpProtocol: tcp
+          ToPort: 80
+
+Outputs:
+  DNSNameofWebServer:
+    Description: DNS Name of My Web Server Instance.
+    Value: !Sub
+      - http://${PublicDNS}
+      - PublicDNS: !GetAtt WebServer.PublicDnsName 
